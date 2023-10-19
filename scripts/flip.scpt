@@ -1,55 +1,91 @@
-use AppleScript version "2.4" -- Yosemite (10.10) or later
+(*
+ * Toggle macOS Mirror Display Option
+ *
+ * @author: Fayaz Ahmed
+ * version: 1.0.1
+ * license: MIT
+ *)
+
+# Script attributes
+use AppleScript version "2.5"
 use scripting additions
-use framework "Foundation"
 
-SystemSettings_Mirror_Displays()
+# initial state of the "System Preferences"
+set runningSP to (get running of application "System Preferences")
 
-on SystemSettings_Mirror_Displays()
-    do shell script "open x-apple.systempreferences:com.apple.preference.displays"
-    tell application "System Events"
-        tell application process "System Settings"
-            tell window 1
-                repeat until splitter group 1 of group 1 exists
-                    delay 0
-                end repeat
-                tell splitter group 1 of group 1
-                    repeat until group 2 exists
-                        delay 0
-                    end repeat
-                    group 2 -- Right hand side of the pane
-                    tell group 2
-                        tell group 1 -- Contents of the Pane
-                            tell scroll area 1 -- Top section - screen selector
-                                try
-                                    keystroke tab
-                                    delay 0.2
-                                    keystroke (key code 124)
-                                on error errorMessage number errorNumber
-                                    if errorNumber is not -1708 then
-                                        log ("Error: " & errorMessage & ", Error Number: " & errorNumber)
-                                    end if
-                                end try
-                            end tell
-                            tell scroll area 2 -- Lower half of the Pane
-                                tell group 1
-                                    tell pop up button 1 -- ( Use as... )
-                                        perform action "AXPress"
-                                        delay 0.2
-                                        try
-                                            keystroke (key code 125) --Arrow key down
-                                            delay 0.2
-                                        end try
-                                        delay 0.5
-                                        try
-                                            keystroke (key code 36) --Enter key down
-                                        end try
-                                    end tell
-                                end tell
-                            end tell
-                        end tell
-                    end tell
-                end tell
-            end tell
+# first open the Display Preferences
+tell application "System Preferences"
+    if not runningSP then
+        activate
+    end if
+    set the current pane to pane id "com.apple.preference.displays"
+    reveal anchor "displaysArrangementTab" of pane id "com.apple.preference.displays"
+end tell
+
+# Now execute the click events to do what we need
+tell application "System Events"
+
+    tell process "System Preferences"
+        set prevCheckBoxStatus to true
+
+        # Wait for the System Preferences Window, this is better than: delay 1
+        repeat until tab group 1 of window 1 exists
+            delay 0.1
+        end repeat
+
+        # collect all the window names
+        set _windows to get the name of every window of application "System Preferences"
+        # log _windows
+
+        local mdCheckBox, checkBoxWindow
+        set mdCheckBox to false
+
+        repeat until mdCheckBox
+            repeat with _window in _windows
+                try
+                    set mdCheckBox to checkbox "Mirror Displays" of tab group 1 of window _window
+                    set checkBoxWindow to _window
+                    exit repeat
+                on error errText number errNum
+                    # some error handling
+                    log "No checkbox in " & _window
+                end try
+            end repeat
+            delay 0.1
+        end repeat
+
+        tell mdCheckBox
+            set prevCheckBoxStatus to value of mdCheckBox as boolean
+            # log prevCheckBoxStatus
+
+            click mdCheckBox
         end tell
+
+        # Again wait for the System Preferences Window
+        repeat until tab group 1 of window "Built-in Display" exists
+        end repeat
+
+        # for "Mirror Displays" we need to make the "Built-in Display" as default
+        if prevCheckBoxStatus is false then
+            # log "now we need to select the Built-in Display"
+            click pop up button of tab group 1 of window "Built-in Display"
+
+            # Wait for the Menu item to appear
+            repeat until menu item "Built-in Display" of menu 1 of pop up button "Optimize for:" of tab group 1 of window "Built-in Display" exists
+                delay 0.1
+            end repeat
+
+            click menu item "Built-in Display" of menu 1 of pop up button "Optimize for:" of tab group 1 of window "Built-in Display"
+        end if
     end tell
-end SystemSettings_Mirror_Displays
+end tell
+
+# we are done, now quit "System Preferences" if it was not already open
+if not runningSP then
+    quit application "System Preferences"
+else
+    # Return to the main screen of "System Preferences"
+    tell application "System Events"
+        click menu item 3 of menu 1 of menu bar item 4 of menu bar 1 of process "System Preferences"
+    end tell
+end if
